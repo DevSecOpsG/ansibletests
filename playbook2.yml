@@ -1,0 +1,41 @@
+---
+- hosts: k8s
+  vars_prompt:
+    - name: nodename
+      prompt: What is your node name you want to delete?
+      private: no
+  tasks:
+     - name: getting internal ip of node
+       shell: kubectl describe node  {{nodename}} | grep  InternalIP | awk '{print $2}'
+       register: y
+     - debug:
+        var: y['stdout']
+     - name: cordon the node
+       command:  kubectl cordon {{nodename}}
+     - name: checking pods1
+       shell: kubectl get pods --all-namespaces -o wide --field-selector spec.nodeName={{nodename}} | grep  my-dep-5b7868d854-4zq9w
+       register: x1
+       ignore_errors: yes
+     - name: checking pods2
+       shell: kubectl get pods --all-namespaces -o wide --field-selector spec.nodeName={{nodename}} | grep  my-dep-5b7868d854-4zq9w
+       register: x2
+       ignore_errors: yes
+     - name: checking for running build complete or not
+       debug:
+         msg: "please wait something is building"
+       failed_when: (x2.rc == 1) or (x1.rc == 1)
+     - name: Buid complete
+       debug:
+         msg: "No more build running"
+     - name: getting instance id
+       command: aws ec2 describe-instance --filter Name=private-ip-address,Values='{{y['stdout']}}' --query 'Reservations[].Instances[].Instance'
+       register: id
+     - name: terminating instance
+       command: aws ec2 terminate-instances --instance-ids {{id['stdout']}}
+#     - name: running shell script
+#        script: [path of sh file]
+
+
+
+
+...
